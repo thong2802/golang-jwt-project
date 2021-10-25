@@ -1,4 +1,4 @@
-package golang_jwt_project
+package main
 
 import (
 	routes "github.com/ducthong2802/golang-jwt-project/routes"

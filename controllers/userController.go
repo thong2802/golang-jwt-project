@@ -11,6 +11,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"golang.org/x/crypto/bcrypt"
 	"log"
 	"net/http"
 	"time"
@@ -24,8 +25,17 @@ func HashPassword()  {
    
 }
 
-func VerifyPassword()  {
-	
+func VerifyPassword(userPassword string, providedPassword string)(bool, string)  {
+	// use library bcrypt so sanh password da duoc băm va passord input co trung nhau k
+	err := bcrypt.CompareHashAndPassword([]byte(providedPassword), []byte(userPassword))
+	check := true
+	msg := ""
+
+	if err != nil {
+		msg   =fmt.Sprintf("email of password is incorrect")
+		check = false
+	}
+	return check, msg
 }
 //AuthController.js này sẽ bao gồm 2 controller login – thực hiện chức năng đăng nhập, tạo token và controller refreshToken – làm mới lại token khi hết hạn.
 func SignUp() gin.HandlerFunc  {
@@ -46,7 +56,7 @@ func SignUp() gin.HandlerFunc  {
 			})
 			return
 		}
-
+		//check email
 		count, err := userCollectoin.CountDocuments(ctx, bson.M{"email" : user.Email})
 		defer cancel()
 		if err != nil {
@@ -55,7 +65,7 @@ func SignUp() gin.HandlerFunc  {
 				"error":"error occured while checking for the email",
 			})
 		}
-
+		//check phone
 		count, err = userCollectoin.CountDocuments(ctx, bson.M{"phone" : user.Phone})
 		defer cancel()
 		if err != nil {
@@ -65,12 +75,14 @@ func SignUp() gin.HandlerFunc  {
 			})
 		}
 
+		//if count ton tai thi toast err
 		if count > 0 {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":"this email or phone number already exists",
 			})
 		}
 
+		// format save in database
 		user.Creat_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.Updated_at, _ = time.Parse(time.RFC3339, time.Now().Format(time.RFC3339))
 		user.ID = primitive.NewObjectID()
@@ -79,6 +91,7 @@ func SignUp() gin.HandlerFunc  {
 		user.Token = &token
 		user.Refresh_token = &refreshToken
 
+		// save vao database
 		resultInsertionNumber, insertErr := userCollectoin.InsertOne(ctx, user)
 		if  insertErr != nil{
 			msg := fmt.Sprintf("User item was not created")
@@ -92,9 +105,47 @@ func SignUp() gin.HandlerFunc  {
 	}
 }
 
+// user login
 func Login() gin.HandlerFunc  {
-	return func(context *gin.Context) {
-		
+	return func(c *gin.Context) {
+		var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+		var user models.User
+		var foundUser models.User
+
+		if err := c.BindJSON(&user); err != nil{
+			c.JSON(http.StatusBadRequest, gin.H{
+				"err" : err.Error(),
+			})
+			return
+		}
+
+		// check email
+		err := userCollectoin.FindOne(ctx, bson.M{"email" : user.Email}).Decode(&foundUser)
+		defer cancel()
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error" : "email or password is incorrect",
+			})
+			return
+		}
+
+			// xac minh password nhap dung khong
+		 passwordIsValid, msg := VerifyPassword(*user.Password, *foundUser.Password)
+		 defer cancel()
+		 if passwordIsValid != true{
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error": msg,
+				})
+			 return
+		 }
+
+		if foundUser.Email == nil  {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":"user not found",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, foundUser)
 	}
 }
 
