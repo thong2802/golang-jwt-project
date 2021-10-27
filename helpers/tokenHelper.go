@@ -1,8 +1,10 @@
 package helpers
 
 import (
+	"context"
 	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/ducthong2802/golang-jwt-project/database"
+	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
 	"log"
 	"os"
@@ -17,7 +19,8 @@ type SignedDetails struct {
 	Email      string
 	First_name string
 	Last_name  string
-	Uid        string
+
+	        string
 	User_type  string
 	jwt.StandardClaims
 }
@@ -54,4 +57,12 @@ func GenerateAllTokens(email string, firstName string, lastName string, userType
 }
 
 
+// UpdateAllTokens
+func UpdateAllTokens(signedToken string, signedRefreshToken string, userId string)  {
+	 var ctx, cancel = context.WithTimeout(context.Background(), 100*time.Second)
+
+	 var updateObj primitive.D
+
+}
 // verifyToken – xác minh token có hợp lệ hay không.
+

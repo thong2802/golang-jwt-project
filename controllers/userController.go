@@ -21,8 +21,12 @@ var userCollectoin *mongo.Collection = database.OpenCollection(database.Client, 
 var validate = validator.New()
 
 //HashPassword encrypts user password
-func HashPassword()  {
-   
+func HashPassword(password string) string  {
+	bytes, err := bcrypt.GenerateFromPassword([]byte(password),14)
+	if err != nil {
+		log.Panic(err)
+	}
+	return string(bytes)
 }
 
 func VerifyPassword(userPassword string, providedPassword string)(bool, string)  {
@@ -65,6 +69,9 @@ func SignUp() gin.HandlerFunc  {
 				"error":"error occured while checking for the email",
 			})
 		}
+		password := HashPassword(*user.Password)
+		user.Password = &password
+
 		//check phone
 		count, err = userCollectoin.CountDocuments(ctx, bson.M{"phone" : user.Phone})
 		defer cancel()
@@ -142,6 +149,20 @@ func Login() gin.HandlerFunc  {
 		if foundUser.Email == nil  {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":"user not found",
+			})
+			return
+		}
+		c.JSON(http.StatusOK, foundUser)
+
+
+		 // token
+		 token, refrestoken,_ := helper.GenerateAllTokens(*foundUser.Email, *foundUser.First_name, *foundUser.Last_name, *foundUser.User_type, foundUser.User_id)
+		 helper.UpdateAllTokens(token, refrestoken, foundUser.User_id)
+		 err = userCollectoin.FindOne(ctx, bson.M{"user_id":foundUser.User_id}).Decode(&foundUser)
+
+		if err !=  nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error" : err.Error(),
 			})
 			return
 		}
